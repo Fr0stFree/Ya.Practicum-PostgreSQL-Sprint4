@@ -1,3 +1,5 @@
+## Оригинальный запрос
+
 ```sql
 SELECT d.name, SUM(count) AS orders_quantity
 FROM order_items oi
@@ -17,3 +19,9 @@ WHERE oi.item IN (
 GROUP BY 1
 ORDER BY orders_quantity DESC;
 ```
+
+## План выполнения
+
+## Решение
+
+## Результат
