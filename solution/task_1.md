@@ -13,9 +13,9 @@ SELECT MAX(order_id) + 1, current_timestamp,
 FROM orders;
 ```
 
-### Решение
+## Решение
 
-#### План запроса
+### План запроса
 
 ```text
 Insert on public.orders  (cost=0.32..0.35 rows=0 width=0) (actual time=0.361..0.364 rows=0 loops=1)
@@ -35,11 +35,11 @@ Planning Time: 0.338 ms
 Execution Time: 0.442 ms
 ```
 
-#### Аналитика
+### Аналитика
 
-При анализе плана запроса видно, что проблемным местом является выражение `SELECT MAX(order_id) + 1 FROM orders` поскольку оно провоцирует базу данных использовать `Index Only Scan` по всему индексу `orders_order_id_idx`. Цена запроса уже составляет `cost=0.29..805.15`. Чем больше будет строк в таблице, тем больше времени займет сканирование. Так же это выражение уязвимо к конкурентным запросам вставки - для сохранения уникальности первичного ключа необходимо блокировать таблицу на вставку на время вычисления нового id. 
+1. При анализе плана запроса видно, что проблемным местом является выражение `SELECT MAX(order_id) + 1 FROM orders` поскольку оно провоцирует базу данных использовать `Index Only Scan` по всему индексу `orders_order_id_idx`. Цена запроса уже составляет `cost=0.29..805.15`. Чем больше будет строк в таблице, тем больше времени займет сканирование. Так же это выражение уязвимо к конкурентным запросам вставки - для сохранения уникальности первичного ключа необходимо блокировать таблицу на вставку на время вычисления нового id. 
 
-Так же я заметил, что на таблице orders поддерживается 10 индексов, что, по-моему мнению, является не только избыточным, но и может привести к значительному замедлению запрос на вставку ввиду необходимости обновления индексов.
+2. Так же я заметил, что на таблице orders поддерживается 10 индексов, что, по-моему мнению, является не только избыточным, но и может привести к значительному замедлению запрос на вставку ввиду необходимости обновления индексов.
 
 ```sql
 SELECT indexname, indexdef 
@@ -60,7 +60,7 @@ orders_total_final_cost_discount_idx	CREATE INDEX orders_total_final_cost_discou
 orders_user_id_idx	CREATE INDEX orders_user_id_idx ON public.orders USING btree (user_id)
 ```
 
-#### Возможное решение
+### Предложения
 
 Очевидным решением кажется использование встроенных в СУБД метода определения значения первичного ключе - `sequence`.
 
@@ -68,3 +68,21 @@ orders_user_id_idx	CREATE INDEX orders_user_id_idx ON public.orders USING btree 
 CREATE SEQUENCE orders_order_id_seq;
 ALTER TABLE orders ALTER COLUMN order_id SET DEFAULT nextval('orders_order_id_seq');
 ```
+
+Новый запрос можно привести к виду
+```sql
+INSERT INTO orders (order_dt, user_id, device_type, city_id, total_cost, discount, final_cost)
+VALUES (current_timestamp, '329551a1-215d-43e6-baee-322f2467272d', 'Mobile', 1, 1000.00, null, 1000.00)
+```
+
+Новый план запроса:
+```text
+Insert on public.orders  (cost=0.00..0.01 rows=0 width=0) (actual time=0.356..0.357 rows=0 loops=1)
+  ->  Result  (cost=0.00..0.01 rows=1 width=122) (actual time=0.004..0.005 rows=1 loops=1)
+        Output: NULL::bigint, CURRENT_TIMESTAMP, '329551a1-215d-43e6-baee-322f2467272d'::uuid, 'Mobile'::character varying, 1, 1000.00::numeric(14,2), NULL::numeric(14,2), 1000.00::numeric(14,2)
+Query Identifier: 9205114353799980060
+Planning Time: 0.053 ms
+Execution Time: 0.404 ms
+```
+
+Заметен очевидный выйгрыш в снижении planning time (0.338 ms -> 0.053 ms) и с cost=0.32..0.35 до cost=0.00..0.01. Заметной разницы в execution time добиться не удалось, скорее всего, из-за накладных расходов на обновление индексов.
