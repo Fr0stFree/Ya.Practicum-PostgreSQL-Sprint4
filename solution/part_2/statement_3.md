@@ -87,6 +87,6 @@ Execution Time: 0.302 ms
 ```
 
 ## Результат
-- Execution Time: 136.736 ms -> 0.302 ms 
+- Execution Time: 136.736 ms -> 0.302 ms
 - cost: 92121.53..92144.87 -> 44.39..44.99
 - memory: ~ +35% (очевидный минус)

@@ -90,5 +90,5 @@ Execution Time: 27.145 ms
 ```
 
 ## Результат
-- Execution Time: 8648.778 ms -> 27.145 ms 
+- Execution Time: 8648.778 ms -> 27.145 ms
 - cost: 61608580.82..61608580.83 -> 5792.38..5792.39
