@@ -21,8 +21,7 @@ BEGIN
     SELECT NEXTVAL('sales_sale_id_sq'), statement_timestamp(), user_id, p_sum_payment
     FROM orders WHERE order_id = p_order_id;
 END;
-$$
-;
+$$;
 ```
 ## Решение
 
@@ -63,10 +62,48 @@ Execution Time: 0.112 ms
 
 ### Аналитика
 
-1. Процедура уже кажется выполняется достаточно быстро.
+1. Таблицы sales содержит избыточную информацию, дублирующуюся в двух других таблицах.
 2. Есть возможность ускорить третью вставку.
 
 ### Предложения
+
+Избавиться от таблицы sales:
+- Перенести столбец `user_id` в таблицу `payments`.
+- Информацию о времени платежа можно взять из таблицы `orders_statuses` поля `status_dt` присоединив таблицы `payments` и `order_statuses` по `order_id`.
+- Величина оплаты может быть получена из столбца `payment_sum` таблицы `payments` вместо обращения к столбцу `sale_sum`.
+
+```sql
+ALTER TABLE payments ADD COLUMN user_id UUID;
+UPDATE payments p
+SET user_id = o.user_id
+FROM orders o
+WHERE p.order_id = o.order_id;
+DROP TABLE sales;
+```
+
+Обновить процедуру:
+```sql
+CREATE OR REPLACE PROCEDURE public.add_payment(
+    IN p_order_id bigint,
+    IN p_sum_payment numeric
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    _user_id UUID;
+BEGIN
+    SELECT user_id INTO _user_id 
+    FROM orders 
+    WHERE order_id = p_order_id;
+    
+    INSERT INTO order_statuses (order_id, status_id, status_dt)
+    VALUES (p_order_id, 2, statement_timestamp());
+    
+    INSERT INTO payments (payment_id, order_id, payment_sum, user_id)
+    VALUES (nextval('payments_payment_id_sq'), p_order_id, p_sum_payment, _user_id);
+END;
+$$;
+```
 
 Перестроить индекс `orders_order_id_idx`:
 ```sql
